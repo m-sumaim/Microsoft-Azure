@@ -1,0 +1,64 @@
+param location string
+param vnet object
+param storageAccountName string
+param nsg object
+param winWebConfig object
+param winWebAdminPassword string
+
+var nsgAttachments = [
+{
+      vnetName:vnet.name
+      subnetName:vnet.subnets[0].name
+      addressPrefix:vnet.subnets[0].prefix
+}
+{
+      vnetName:vnet.name
+      subnetName:vnet.subnets[1].name
+      addressPrefix:vnet.subnets[1].prefix
+}
+]
+
+module devnet 'modules/network/vnet.bicep' = { 
+   name: 'dev-network'
+   params: { 
+    name:vnet.name
+    location: location
+    addressPrefixes:vnet.addressPrefixes
+    subnets:vnet.subnets
+   }  
+}
+
+module storage 'modules/storage/storageAccount.bicep' = { 
+    name: 'stcloudhublearningdeveus'
+    params: { 
+      name:storageAccountName
+      location: location
+    }
+}
+
+
+module sharednsg 'modules/security/nsg.bicep' = { 
+   name: 'nsg-az104-shared-eus-01'
+   params: { 
+      location:location
+      name:nsg.name
+      rules:nsg.rules
+      attachments:nsgAttachments
+   }
+   dependsOn:[devnet]
+}
+
+module winWeb 'modules/compute/windowsVm.bicep'= { 
+   name:'win-web-dev'
+   params: { 
+      location:location
+      baseName:winWebConfig.baseName
+      vmSize:winWebConfig.vmSize
+      count:winWebConfig.count
+      adminUserName:winWebConfig.adminUserName
+      subnetId: devnet.outputs.subnetIds[0].id
+      adminPassword:winWebAdminPassword 
+   }
+
+   dependsOn:[sharednsg]
+}
